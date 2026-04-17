@@ -19,7 +19,7 @@ Session-start banner now surfaces Claude Code + Codex version status (current â†
 
 - **Version-aware session banner.** The Claude Code and Codex lines now show current version, latest version (drift indicated with ` â†’ `), and Claude Code's auto-update state:
 
-  ![session-start banner example](docs/session-banner.png)
+  ![session-start banner example](https://raw.githubusercontent.com/yzhao062/anywhere-agents/main/docs/session-banner.png)
 
   Text form:
 
