@@ -11,6 +11,20 @@ Version tags apply uniformly to the repo content **and** the matching `anywhere-
 
 _No unreleased changes queued._
 
+## [0.1.5] — 2026-04-17
+
+Bootstrap self-update — cached `.agent-config/bootstrap.{ps1,sh}` now copies itself forward from the sparse clone at the end of every run, so future bootstrap improvements reach existing consumers without a manual re-download.
+
+### Fixed
+
+- **Bootstrap self-update** in `bootstrap/bootstrap.ps1` and `bootstrap/bootstrap.sh`. At the end of each run, the cached entrypoint (`.agent-config/bootstrap.ps1` / `.agent-config/bootstrap.sh`) is overwritten with the fresh version pulled via sparse clone (`.agent-config/repo/bootstrap/bootstrap.{ps1,sh}`). Without this, any consumer who bootstrapped before a bootstrap-script change was permanently frozen on the old version and would never receive future improvements (e.g., the 0.1.3 generator step that creates `CLAUDE.md` and `agents/codex.md`).
+- **Sparse-checkout now includes `bootstrap/`.** Prior versions limited the sparse clone to `skills .claude scripts user`, so the self-update source (`.agent-config/repo/bootstrap/bootstrap.{ps1,sh}`) did not exist in the sparse tree and the guard was silently a no-op. Caught in post-commit Codex review.
+- **Self-update is best-effort.** PowerShell wraps `Copy-Item` in `try/catch` with `Write-Warning`; Bash uses `|| printf '...' >&2`. An anti-virus lock or read-only cache no longer turns a successful refresh into a reported bootstrap failure.
+
+### Rollout note
+
+The self-update block can only run once a consumer already has a bootstrap script containing that block. Existing consumers whose `.agent-config/bootstrap.ps1` or `.agent-config/bootstrap.sh` predates 0.1.5 need one seed refresh — run the bootstrap block in `AGENTS.md`, re-invoke `pipx run anywhere-agents` / `npx anywhere-agents`, or manually re-download the raw bootstrap script from `main`. After that single seed update, the cached entrypoint self-refreshes automatically on every subsequent session.
+
 ## [0.1.4] — 2026-04-16
 
 User-visible session start banner, real-agent smoke (local + CI), pre-push safety hook, broadened validate matrix (macOS + Python 3.9-3.13), and published-package registry smoke. No breaking changes to the install flow.
