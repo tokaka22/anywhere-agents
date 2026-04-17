@@ -11,6 +11,41 @@ Version tags apply uniformly to the repo content **and** the matching `anywhere-
 
 _No unreleased changes queued._
 
+## [0.1.7] — 2026-04-17
+
+Session-start banner now surfaces Claude Code + Codex version status (current → latest + auto-update state). Bootstrap heals a Claude Code auto-update gotcha left over from npm/winget-era installs.
+
+### Added
+
+- **Version-aware session banner.** The Claude Code and Codex lines now show current version, latest version (drift indicated with ` → `), and Claude Code's auto-update state:
+
+  ![session-start banner example](docs/session-banner.png)
+
+  Text form:
+
+  ```
+  📦 anywhere-agents active
+     ├── OS: win32
+     ├── Claude Code: 2.1.112 → 2.1.115 (auto-update: on) · Opus 4.7 · effort=max
+     ├── Codex: 0.121.0 → 0.122.0 · gpt-5.4 · xhigh · fast · fast_mode=true
+     ├── Skills: 4 shared (ci-mockup-figure, implement-review, my-router, readme-polish)
+     ├── Hooks: PreToolUse guard.py, SessionStart session_bootstrap.py
+     └── Session check: all clear
+  ```
+
+  When versions match, the ` → <latest>` half is omitted and the banner just shows `Claude Code: 2.1.115 …`. `auto-update: off` appears when `autoUpdates: false` is still present in `~/.claude.json` (see Fixed below) or `DISABLE_AUTOUPDATER=1` is set in the effective env.
+
+- **`session_bootstrap.py` version cache.** The SessionStart hook now refreshes `~/.claude/hooks/version-cache.json` from the npm registry (`@anthropic-ai/claude-code` and `@openai/codex`) once per 24 hours. The banner reads this cache; on cache hit the session starts with zero extra latency. On network failure, the cache keeps the last-known values and the banner still shows current versions without the `→ latest` half.
+
+### Fixed
+
+- **Bootstrap heals legacy `autoUpdates: false` in `~/.claude.json`.** Consumers who migrated from npm or winget to the native Claude Code installer may have a stale `"autoUpdates": false` flag blocking the native updater daemon from spawning at launch (observed behavior: `autoUpdatesProtectedForNative: true` does not actually neutralize it in that path). Bootstrap now flips the stale flag to `true` on every run. To genuinely disable auto-updates, use `DISABLE_AUTOUPDATER=1` via the `env` block in `~/.claude/settings.json` — that takes precedence and is the only supported opt-out path going forward.
+- **`AGENTS.md` Environment Notes updated** to match the real fix path: the prior claim that `autoUpdatesProtectedForNative` neutralizes the legacy flag has been replaced with the observed behavior and the new bootstrap heal.
+
+### Compatibility
+
+- Existing consumers on 0.1.6 caches: self-update pulls the 0.1.7 bootstrap on next session. On the run after that, the autoUpdates heal fires if needed and the version cache populates. No user action required.
+
 ## [0.1.6] — 2026-04-17
 
 Fork-friendly bootstrap — pass your upstream as the bootstrap argv, env var, or persisted file. Forkers no longer have to edit bootstrap scripts to point consumers at their fork; one command per consumer now carries the upstream for the life of that project. Also fixes a session-start-banner suppression by `superpowers` and a stale-origin bug on subsequent runs.
@@ -258,7 +293,8 @@ Initial public release. The sanitized downstream of the author's private daily-d
 - **Medium** — README / CHANGELOG / hero overstated the guard hook's scope by listing `rm -rf` alongside Git/GitHub commands. Corrected to distinguish guard-covered commands from settings-based permission prompts.
 - **Low** — Trailing whitespace in `AGENTS.md`; `docs/hero.html` external avatar URL (vendored to `docs/avatar.jpg` for reproducibility). Both fixed.
 
-[Unreleased]: https://github.com/yzhao062/anywhere-agents/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/yzhao062/anywhere-agents/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/yzhao062/anywhere-agents/releases/tag/v0.1.7
 [0.1.6]: https://github.com/yzhao062/anywhere-agents/releases/tag/v0.1.6
 [0.1.5]: https://github.com/yzhao062/anywhere-agents/releases/tag/v0.1.5
 [0.1.4]: https://github.com/yzhao062/anywhere-agents/releases/tag/v0.1.4

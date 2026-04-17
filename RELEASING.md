@@ -30,9 +30,36 @@ grep -rEi "yuezh|yzhao010|USC|miniforge3|py312|Overleaf" \
   --include="*.yaml" --include="*.sh" --include="*.ps1" \
   .
 # Review hits: "USC" in the maintainer credential is OK; "co-PI" inside hyphenation examples is OK; any other match is a leak and must be fixed.
+
+# 4. Bilingual README parity: if README.md changed in this release, README.zh-CN.md must mirror the change.
+#    Structural drift (sections, figures, scenario order) is not allowed; translation nuance is fine.
+git diff --name-only HEAD~1 HEAD -- README.md README.zh-CN.md
+# If only one of the two paths appears in the output, something drifted — update the other to match
+# before tagging. Specifically: if README.md gained or lost a figure, scenario, or heading, apply the
+# same change to README.zh-CN.md (translated). New images used by README.md (e.g. docs/*.png) must
+# also be referenced in README.zh-CN.md unless the image is English-only by design.
+
+# 5. Cross-repo parity with the private `yzhao062/agent-config` source repo.
+#    Shared core files (must mirror, modulo expected default-upstream string differences like
+#    "yzhao062/anywhere-agents" vs "yzhao062/agent-config" and the banner label in AGENTS.md):
+#      AGENTS.md
+#      bootstrap/bootstrap.{ps1,sh}
+#      scripts/{guard.py, session_bootstrap.py, generate_agent_configs.py}
+#      scripts/{pre-push-smoke.sh, remote-smoke.sh}
+#      .claude/commands/*.md  .claude/settings.json  user/settings.json  .githooks/pre-push
+#      skills/<name>/  for each skill that ships in both repos
+#    Single-side by design (no mirror required):
+#      anywhere-agents only: README.md, README.zh-CN.md, CHANGELOG.md, RELEASING.md, packages/,
+#        docs/ (hero, banner, RTD content), .readthedocs.yaml, mkdocs.yml
+#      agent-config only: docs/anywhere-agents.md and other private docs, reference-skills/,
+#        MIGRATIONS.md, private-only skills (bibref-filler, dual-pass-workflow, figure-prompt-builder)
+#    If you touched a shared file in one repo only, update the other before tagging. Spot-check by
+#    diffing each shared path between the two local clones (e.g. `diff -q AGENTS.md ../agent-config/AGENTS.md`
+#    tolerates the expected default-upstream string differences but should otherwise flag the same
+#    structural changes).
 ```
 
-If any of the three checks fail, stop and fix before continuing.
+If any of the five checks fail, stop and fix before continuing.
 
 ## Real-agent smoke tests
 

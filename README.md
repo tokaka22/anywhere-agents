@@ -140,6 +140,10 @@ You would have to read a dozen docs pages to discover these individually. `anywh
 | `session_bootstrap.py` SessionStart hook keeps the config fresh every session | Deployed to `~/.claude/hooks/session_bootstrap.py` |
 | Session-start check flags outdated Actions pins, missing Codex config, and session model/effort below preference | Runs on every new session |
 
+![session-start banner showing Claude Code and Codex versions, auto-update state, active skills, hooks, and session check](docs/session-banner.png)
+
+*Every session starts with this banner: current and latest versions of Claude Code and Codex (arrows appear only on drift), auto-update state, active skills, hooks, and any drift the session check found.*
+
 Most users are running suboptimal defaults without knowing. This is the upgrade they did not look up.
 
 ## Install
