@@ -46,7 +46,7 @@ if (Test-Path .agent-config/repo/.git) {
 } else {
   git clone --depth 1 --filter=blob:none --sparse $RepoUrl .agent-config/repo
 }
-git -C .agent-config/repo sparse-checkout set skills .claude scripts user bootstrap
+git -C .agent-config/repo sparse-checkout set skills .claude scripts user bootstrap references
 # Generate per-agent config files (CLAUDE.md, agents/codex.md) from AGENTS.md.
 # Generator preserves hand-authored files (no GENERATED header) and warns loudly.
 if (Test-Path .agent-config/repo/scripts/generate_agent_configs.py) {

@@ -27,7 +27,7 @@ if [ -d .agent-config/repo/.git ]; then
 else
   git clone --depth 1 --filter=blob:none --sparse "$REPO_URL" .agent-config/repo
 fi
-git -C .agent-config/repo sparse-checkout set skills .claude scripts user bootstrap
+git -C .agent-config/repo sparse-checkout set skills .claude scripts user bootstrap references
 # Generate per-agent config files (CLAUDE.md, agents/codex.md) from AGENTS.md.
 # Generator preserves hand-authored files (no GENERATED header) and warns loudly.
 if [ -f .agent-config/repo/scripts/generate_agent_configs.py ]; then
