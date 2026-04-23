@@ -239,6 +239,42 @@ def _read_ts(path):
         return 0
 
 
+def _diagnose_emitted(path):
+    """If the ack file exists but parses/shapes wrong, return a short hint
+    describing what went wrong. Returns None when the file is absent or
+    parses into a valid {'ts': number} object. Used to surface the real
+    retry mistake to the agent instead of looping on the same generic
+    'not yet emitted' deny message.
+    """
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            raw = f.read()
+    except Exception:
+        return "existing ack file could not be read"
+    preview = raw.strip()[:80]
+    try:
+        obj = json.loads(raw)
+    except Exception:
+        return (
+            f"existing ack is not valid JSON (got: {preview!r}). "
+            f"Do not include surrounding single quotes from this message's "
+            f"example, and do not write a bare number — write exactly the JSON "
+            f"object shown below."
+        )
+    if not isinstance(obj, dict) or "ts" not in obj:
+        return (
+            f"existing ack JSON is malformed (got: {preview!r}). "
+            f"It must be an object with a numeric 'ts' key."
+        )
+    try:
+        float(obj["ts"])
+    except Exception:
+        return f"existing ack ts={obj['ts']!r} is not a number"
+    return None
+
+
 def _find_consumer_root(start=None):
     """Walk up from `start` (default os.getcwd()) looking for a directory that
     contains .agent-config/bootstrap.sh or .agent-config/bootstrap.ps1.
@@ -309,13 +345,17 @@ def check_banner_emission(tool_name, tool_input):
     emitted_ts = _read_ts(emitted_path)
 
     if event_ts > emitted_ts:
+        hint = _diagnose_emitted(emitted_path)
+        diagnosis = f"\nNOTE: {hint}" if hint else ""
         return (
             "Session banner not yet emitted for this SessionStart event. "
             "Per AGENTS.md Session Start Check, emit the banner as the first "
             "content of your response, then Write to "
-            f"{emitted_path} with content '{{\"ts\": {event_ts}}}' "
-            "to acknowledge. Only then retry this tool call. To bypass, set "
-            "AGENT_CONFIG_GATES=off in ~/.claude/settings.json env."
+            f"{emitted_path} with this exact JSON body (no surrounding "
+            "quotes, no trailing newline):\n"
+            f'  {{"ts": {event_ts}}}\n'
+            "Only then retry this tool call. To bypass, set "
+            f"AGENT_CONFIG_GATES=off in ~/.claude/settings.json env.{diagnosis}"
         )
 
     return None
