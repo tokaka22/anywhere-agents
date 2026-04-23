@@ -104,5 +104,62 @@ class BannerGateTests(unittest.TestCase):
         self.assertIsNone(msg)
 
 
+class CircuitBreakerTests(unittest.TestCase):
+    def setUp(self):
+        self._orig_cwd = os.getcwd()
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = _make_consumer_root(self._tmp.name)
+        os.chdir(self.root)
+        _write(self.root, "session-event.json", json.dumps({"ts": EVENT_TS}))
+        # Start every test from a known-bad ack so deny always fires.
+        _write(self.root, "banner-emitted.json", "garbage-not-json")
+
+    def tearDown(self):
+        os.chdir(self._orig_cwd)
+        self._tmp.cleanup()
+
+    def _bash(self):
+        return guard.check_banner_emission("Bash", {"command": "ls"})
+
+    def _state_path(self):
+        return os.path.join(self.root, ".agent-config", "banner-deny-state.json")
+
+    def test_trips_after_N_denies_without_ack_change(self):
+        # Each call keeps the same ack; streak must accumulate and trip.
+        for i in range(1, guard._MAX_BANNER_DENY_STREAK):
+            msg = self._bash()
+            self.assertIsNotNone(msg, f"deny #{i} should still block")
+            self.assertIn("Circuit breaker:", msg)
+        tripped = self._bash()
+        self.assertIsNone(
+            tripped,
+            "circuit breaker should force-allow on the Nth deny",
+        )
+
+    def test_ack_mtime_change_resets_streak(self):
+        # Drive the counter up a few times.
+        for _ in range(2):
+            self._bash()
+        c1, _ = guard._load_deny_state(self._state_path())
+        self.assertEqual(c1, 2)
+
+        # Simulate agent rewriting the ack (mtime advances, content still bad).
+        import time as _t
+        _t.sleep(0.02)
+        _write(self.root, "banner-emitted.json", "still-garbage")
+
+        # Next deny should reset the streak to 1.
+        self._bash()
+        c2, _ = guard._load_deny_state(self._state_path())
+        self.assertEqual(c2, 1, "ack mtime change should reset streak")
+
+    def test_valid_ack_does_not_touch_state(self):
+        # Good ack → check passes → no circuit-breaker bookkeeping should run.
+        _write(self.root, "banner-emitted.json", json.dumps({"ts": EVENT_TS}))
+        msg = self._bash()
+        self.assertIsNone(msg)
+        self.assertFalse(os.path.exists(self._state_path()))
+
+
 if __name__ == "__main__":
     unittest.main()

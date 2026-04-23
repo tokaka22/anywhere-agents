@@ -275,6 +275,36 @@ def _diagnose_emitted(path):
     return None
 
 
+# Circuit breaker: if Bash is denied this many times in a row WITHOUT the
+# agent modifying the ack file between retries, force-allow on the next call
+# to break a runaway token-burn loop. Reset on SessionStart (see
+# session_bootstrap.write_session_event) and whenever the ack mtime advances.
+# 5 picked to give the diagnostic NOTE: hint plenty of room to land before
+# tripping, while capping the worst-case loss at ~5 × ~10k = ~50k tokens.
+_MAX_BANNER_DENY_STREAK = 5
+
+
+def _load_deny_state(state_path):
+    """Read {'count': int, 'last_emitted_mtime': float}. Returns (0, 0.0)
+    on any error or missing file — equivalent to 'no prior denies seen'."""
+    try:
+        with open(state_path, encoding="utf-8") as f:
+            data = json.load(f)
+        return int(data.get("count", 0)), float(data.get("last_emitted_mtime", 0.0))
+    except Exception:
+        return 0, 0.0
+
+
+def _save_deny_state(state_path, count, mtime):
+    """Persist circuit-breaker state. Errors are swallowed: a filesystem
+    hiccup should degrade to pre-circuit-breaker behavior, not crash the hook."""
+    try:
+        with open(state_path, "w", encoding="utf-8") as f:
+            json.dump({"count": count, "last_emitted_mtime": mtime}, f)
+    except Exception:
+        pass
+
+
 def _find_consumer_root(start=None):
     """Walk up from `start` (default os.getcwd()) looking for a directory that
     contains .agent-config/bootstrap.sh or .agent-config/bootstrap.ps1.
@@ -345,8 +375,39 @@ def check_banner_emission(tool_name, tool_input):
     emitted_ts = _read_ts(emitted_path)
 
     if event_ts > emitted_ts:
+        state_path = os.path.join(
+            consumer_root, ".agent-config", "banner-deny-state.json"
+        )
+        prev_count, prev_mtime = _load_deny_state(state_path)
+        try:
+            cur_mtime = (
+                os.path.getmtime(emitted_path)
+                if os.path.exists(emitted_path) else 0.0
+            )
+        except OSError:
+            cur_mtime = 0.0
+        # Agent modified the ack since the last deny → fresh attempt, not
+        # a continuation of the same loop. Otherwise continue the streak.
+        count = 1 if cur_mtime > prev_mtime else prev_count + 1
+
+        if count >= _MAX_BANNER_DENY_STREAK:
+            _save_deny_state(state_path, 0, cur_mtime)
+            sys.stderr.write(
+                f"[guard.py] banner-gate circuit breaker tripped at {count} "
+                "consecutive denies without ack-file progress. Allowing tool "
+                "call to prevent runaway token burn. Fix "
+                f"{emitted_path} or set AGENT_CONFIG_GATES=off.\n"
+            )
+            return None
+
+        _save_deny_state(state_path, count, cur_mtime)
         hint = _diagnose_emitted(emitted_path)
         diagnosis = f"\nNOTE: {hint}" if hint else ""
+        remaining = _MAX_BANNER_DENY_STREAK - count
+        tripwire = (
+            f"\n(Circuit breaker: {remaining} more deny(s) without modifying "
+            "the ack file will force-allow to break the loop.)"
+        )
         return (
             "Session banner not yet emitted for this SessionStart event. "
             "Per AGENTS.md Session Start Check, emit the banner as the first "
@@ -355,7 +416,8 @@ def check_banner_emission(tool_name, tool_input):
             "quotes, no trailing newline):\n"
             f'  {{"ts": {event_ts}}}\n'
             "Only then retry this tool call. To bypass, set "
-            f"AGENT_CONFIG_GATES=off in ~/.claude/settings.json env.{diagnosis}"
+            f"AGENT_CONFIG_GATES=off in ~/.claude/settings.json env."
+            + tripwire + diagnosis
         )
 
     return None

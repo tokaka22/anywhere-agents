@@ -89,6 +89,18 @@ def write_session_event(consumer_root: str) -> None:
     except Exception:
         pass
 
+    # Fresh event → reset the guard.py banner-gate circuit breaker so a new
+    # session does not inherit the previous session's deny streak.
+    state_path = os.path.join(
+        consumer_root, ".agent-config", "banner-deny-state.json"
+    )
+    try:
+        os.remove(state_path)
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
+
 
 def update_version_cache() -> None:
     """Refresh ~/.claude/hooks/version-cache.json with the latest Claude Code and
